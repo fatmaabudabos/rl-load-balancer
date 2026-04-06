@@ -10,22 +10,39 @@ class VM:
         self.energy_rate     = energy_rate       # energy consumed per ms of execution (kWh)
 
         # ── Runtime state ─────────────────────────────────────────────────────
-        self.queue          = []    # jobs waiting to be executed
-        self.cpu_used       = 0.0   # CPU units currently in use
-        self.available_time = 0.0   # simulation clock time when VM is free
+        self.queue          = []    # jobs assigned to this VM
+        self.available_time = 0.0   # simulation clock time when VM finishes all queued work
 
         # ── History (for metrics) ─────────────────────────────────────────────
         self.total_energy   = 0.0   # total energy consumed across all jobs
         self.completed_jobs = []    # all jobs this VM has finished
 
     # ── Utilisation ───────────────────────────────────────────────────────────
-    def get_utilization(self):
-        """Returns CPU utilisation as a fraction between 0.0 and 1.0."""
-        return min(self.cpu_used / self.cpu_capacity, 1.0)
+    def get_utilization(self, current_time=0.0):
+        """
+        Returns real-time utilisation as a fraction between 0.0 and 1.0.
+        Based on how much backlog the VM has relative to a 500ms reference window.
+        If the VM is free (available_time <= current_time), utilisation is 0.
+        """
+        if self.available_time <= current_time:
+            return 0.0
+        backlog_ms = self.available_time - current_time
+        return min(backlog_ms / 500.0, 1.0)
 
-    def is_overloaded(self):
+    def get_avg_utilization(self, simulation_end_time):
+        """
+        Returns average utilisation over the full simulation.
+        = total CPU time spent executing jobs / total simulation time.
+        Used for final metrics and plots.
+        """
+        if simulation_end_time <= 0:
+            return 0.0
+        total_cpu_time = sum(job.exe_time for job in self.completed_jobs)
+        return min(total_cpu_time / simulation_end_time, 1.0)
+
+    def is_overloaded(self, current_time=0.0):
         """Returns True if utilisation exceeds the overload threshold."""
-        return self.get_utilization() >= OVERLOAD_THRESHOLD
+        return self.get_utilization(current_time) >= OVERLOAD_THRESHOLD
 
     # ── Job assignment ────────────────────────────────────────────────────────
     def assign_job(self, job, current_time):
@@ -52,8 +69,7 @@ class VM:
         job.cost = exe_time * self.energy_rate
 
         # update VM state
-        self.cpu_used        = min(self.cpu_used + job.cpu_demand, self.cpu_capacity)
-        self.available_time  = current_time + wait_time + exe_time
+        self.available_time = current_time + wait_time + exe_time
         self.total_energy   += job.cost
         self.completed_jobs.append(job)
         self.queue.append(job)
@@ -62,7 +78,6 @@ class VM:
     def reset(self):
         """Resets VM to initial state for a fresh simulation run."""
         self.queue          = []
-        self.cpu_used       = 0.0
         self.available_time = 0.0
         self.total_energy   = 0.0
         self.completed_jobs = []

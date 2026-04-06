@@ -70,7 +70,7 @@ class CloudEnvironment:
             job.priority / 3.0,   # normalise priority to 0-1
         ]
 
-        vm_utils = [vm.get_utilization() for vm in self.vms]
+        vm_utils = [vm.get_utilization(self.current_time) for vm in self.vms]
 
         return np.array(job_features + vm_utils, dtype=np.float32)
 
@@ -84,7 +84,7 @@ class CloudEnvironment:
         - mean(Ui)  = average utilisation across all VMs (penalises imbalance)
         Higher reward = better balance.
         """
-        utilizations = [vm.get_utilization() for vm in self.vms]
+        utilizations = [vm.get_utilization(self.current_time) for vm in self.vms]
         u_max  = max(utilizations)
         u_mean = sum(utilizations) / len(utilizations)
 
@@ -124,7 +124,7 @@ class CloudEnvironment:
         Returns a list of VM ids that are currently overloaded (util >= 80%).
         Migration logic will be added in a later milestone.
         """
-        return [vm.vm_id for vm in self.vms if vm.is_overloaded()]
+        return [vm.vm_id for vm in self.vms if vm.is_overloaded(self.current_time)]
 
     # ── Reset ─────────────────────────────────────────────────────────────────
     def reset(self):
