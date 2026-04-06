@@ -2,7 +2,7 @@ import numpy as np
 from environment.vm import VM
 from environment.job import Job
 from config import (
-    NUM_VMS, NUM_JOBS, ALPHA, BETA, SLA_THRESHOLD, OVERLOAD_THRESHOLD
+    NUM_VMS, NUM_JOBS, ALPHA, BETA, SLA_THRESHOLD, OVERLOAD_THRESHOLD, SLA_PENALTY
 )
 
 
@@ -56,18 +56,21 @@ class CloudEnvironment:
     # ── State ─────────────────────────────────────────────────────────────────
     def get_state(self):
         """
-        Returns the current state as a flat numpy array:
-        [job.cpu_demand, job.memory_demand, job.priority,
-         vm0.utilization, vm1.utilization, vm2.utilization, vm3.utilization]
+        Returns the current state as a flat numpy array of size 7:
+        [job_cpu, job_mem, job_priority,
+         vm0_util, vm1_util, vm2_util, vm3_util]
 
-        This is the input vector the RL agent sees before making a decision.
+        VM utilisation is computed as the fraction of a 500ms reference
+        window that the VM's backlog occupies (clamped to 0-1).
+        This gives the agent a clear signal about which VMs are free
+        vs loaded at normal operating arrival rates.
         """
         job = self.jobs[self.current_job_index]
 
         job_features = [
             job.cpu_demand,
             job.memory_demand,
-            job.priority / 3.0,   # normalise priority to 0-1
+            job.priority / 3.0,
         ]
 
         vm_utils = [vm.get_utilization(self.current_time) for vm in self.vms]
@@ -75,20 +78,29 @@ class CloudEnvironment:
         return np.array(job_features + vm_utils, dtype=np.float32)
 
     # ── Reward ────────────────────────────────────────────────────────────────
-    def calculate_reward(self):
+    def calculate_reward(self, job):
         """
-        R = α(1 - Umax) + β(1 - mean(Ui))
+        R = α(1 - Umax) + β(1 - mean(Ui)) - SLA_PENALTY (if SLA violated)
 
-        Taken directly from the paper.
+        Base formula taken directly from the paper:
         - Umax      = utilisation of the most loaded VM (penalises overload)
         - mean(Ui)  = average utilisation across all VMs (penalises imbalance)
-        Higher reward = better balance.
+
+        SLA penalty added to give the agent a direct signal when a job
+        exceeds the response time threshold — without this the agent can
+        balance utilisation but still produce terrible response times.
         """
         utilizations = [vm.get_utilization(self.current_time) for vm in self.vms]
         u_max  = max(utilizations)
         u_mean = sum(utilizations) / len(utilizations)
 
-        return ALPHA * (1 - u_max) + BETA * (1 - u_mean)
+        reward = ALPHA * (1 - u_max) + BETA * (1 - u_mean)
+
+        # deduct penalty if this job violated the SLA
+        if not job.success:
+            reward -= SLA_PENALTY
+
+        return reward
 
     # ── Step ──────────────────────────────────────────────────────────────────
     def step(self, vm_index):
@@ -107,8 +119,8 @@ class CloudEnvironment:
         # mark job success based on SLA threshold
         job.success = job.response_time <= SLA_THRESHOLD
 
-        # compute reward after assignment
-        reward = self.calculate_reward()
+        # compute reward after assignment (job fields now populated)
+        reward = self.calculate_reward(job)
 
         # advance to next job
         self.current_job_index += 1

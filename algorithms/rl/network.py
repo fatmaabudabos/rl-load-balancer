@@ -10,7 +10,8 @@ class QNetwork(nn.Module):
     The agent picks the VM with the highest Q-value.
 
     Architecture:
-        Input  (7)  → [job_cpu, job_memory, job_priority, vm0_util, vm1_util, vm2_util, vm3_util]
+        Input  (7)  → [job_cpu, job_memory, job_priority,
+                        vm0_util, vm1_util, vm2_util, vm3_util]
         Hidden (64) → ReLU
         Hidden (64) → ReLU
         Output (4)  → one Q-value per VM
