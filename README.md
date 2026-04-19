@@ -1,6 +1,6 @@
 # RL-Based VM Load Balancer
 
-An offline simulation comparing AI-based (DQN) load balancing against Round Robin and Least Connection baselines for virtual machine scheduling in cloud environments.
+An offline simulation comparing AI-based load balancing against Round Robin and Least Connection baselines for virtual machine scheduling in cloud environments.
 
 Inspired by: *Enhancing Machine Learning Performance with AI-Based Virtual Machine Load Balancing*
 
@@ -10,25 +10,46 @@ Inspired by: *Enhancing Machine Learning Performance with AI-Based Virtual Machi
 
 ```
 rl-load-balancer/
+├── data/
+│   ├── loader.py        # Loads Google Cluster Data, extracts CPU and memory per VM
+│   └── dataset.py       # Builds sliding window sequences for LSTM training
 ├── algorithms/
-│   ├── round_robin/scheduler.py      # Round Robin baseline
-│   ├── least_connection/scheduler.py # Least Connection baseline
-│   └── rl/
-│       ├── agent.py                  # DQN agent (epsilon-greedy, replay buffer)
-│       └── network.py                # Neural network (Q-value estimator)
+│   ├── round_robin/
+│   │   └── scheduler.py # Round Robin baseline
+│   └── least_connection/
+│       └── scheduler.py # Least Connection baseline
 ├── environment/
-│   ├── job.py                        # Job class
-│   ├── vm.py                         # VM class
-│   └── cloud_environment.py          # Simulation engine
-├── metrics/
-│   └── collector.py                  # Computes all evaluation metrics
+│   ├── job.py           # Job class
+│   ├── vm.py            # VM class
+│   └── cloud_environment.py  # Simulation engine
 ├── results/
-│   └── plots/                        # Output charts saved here
-├── config.py                         # All hyperparameters in one place
-├── utils.py                          # Helpers: create env, run scheduler
-├── main.py                           # Experiment runner
+│   └── plots/           # Output charts saved here
+├── config.py            # All parameters in one place
+├── main.py              # Experiment runner
 └── requirements.txt
 ```
+
+---
+
+## Progress
+
+### Done
+- **Environment** — 4 VMs with varied capacities, 1000 jobs with random CPU/memory demands
+- **Round Robin baseline** — assigns jobs in circular order
+- **Least Connection baseline** — assigns to VM with least backlog
+- **Metrics** — task completion rate and CPU utilization per VM
+- **Plots** — task completion vs arrival rate, CPU utilization per VM
+- **Data pipeline** — loads Google Cluster Data 2011, builds (360, 10, 2) dataset for LSTM training
+
+### In Progress
+- LSTM load prediction model
+- RL agent for VM assignment decisions
+
+### Coming Later
+- VM migration
+- Dynamic resource allocation
+- Auto-tuning
+- Full evaluation with Google Cluster Data
 
 ---
 
@@ -37,7 +58,7 @@ rl-load-balancer/
 ```bash
 # 1. Create and activate virtual environment
 python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
+venv\Scripts\activate        # Windows
 
 # 2. Install dependencies
 pip install -r requirements.txt
@@ -50,13 +71,10 @@ Results and plots will be saved to `results/plots/`.
 
 ---
 
-## Metrics Evaluated
+## Metrics
 
-- Average Response Time (ms)
-- CPU Utilization per VM (%)
-- Energy Consumption (kWh)
 - Task Completion Rate (%)
-- SLA Compliance (%)
+- CPU Utilisation per VM (%)
 
 ---
 
@@ -65,5 +83,5 @@ Results and plots will be saved to `results/plots/`.
 | Algorithm | Type | Description |
 |---|---|---|
 | Round Robin | Baseline | Assigns jobs in circular order |
-| Least Connection | Baseline | Assigns to VM with fewest active jobs |
-| DQN (RL Agent) | Proposed | Learns optimal assignment via Q-learning |
+| Least Connection | Baseline | Assigns to VM with least backlog |
+| RL Agent | Proposed (coming) | Learns optimal assignment via Q-learning |
