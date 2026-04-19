@@ -18,15 +18,19 @@ class CloudEnvironment:
 
     # ── Setup ──────────────────────────────────────────────────────────────────
     def _create_vms(self):
-        """Creates 4 VMs with varied capacities and energy rates."""
+        """
+        Creates 4 VMs with varied capacities.
+        VM0 and VM2 are strong (cpu=4.0), VM1 and VM3 are weak (cpu=2.0).
+        This makes scheduling non-trivial — a dumb scheduler will overload the weak VMs.
+        """
         configs = [
-            # (vm_id, cpu_capacity, memory_capacity, energy_rate)
-            (0, 4.0, 8.0, 0.05),
-            (1, 2.0, 4.0, 0.03),
-            (2, 4.0, 8.0, 0.05),
-            (3, 2.0, 4.0, 0.03),
+            # (vm_id, cpu_capacity, memory_capacity)
+            (0, 4.0, 8.0),
+            (1, 2.0, 4.0),
+            (2, 4.0, 8.0),
+            (3, 2.0, 4.0),
         ]
-        return [VM(vid, cpu, mem, er) for vid, cpu, mem, er in configs]
+        return [VM(vid, cpu, mem) for vid, cpu, mem in configs]
 
     def _generate_jobs(self):
         """

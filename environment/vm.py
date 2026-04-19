@@ -2,38 +2,35 @@ from config import OVERLOAD_THRESHOLD
 
 
 class VM:
-    def __init__(self, vm_id, cpu_capacity, memory_capacity, energy_rate):
-        # ── Identity & capacity ───────────────────────────────────────────────
+    def __init__(self, vm_id, cpu_capacity, memory_capacity):
+        # ── Identity & capacity ────────────────────────────────────────────────
         self.vm_id           = vm_id
         self.cpu_capacity    = cpu_capacity      # total CPU units available
         self.memory_capacity = memory_capacity   # total memory units available
-        self.energy_rate     = energy_rate       # energy consumed per ms of execution (kWh)
 
-        # ── Runtime state ─────────────────────────────────────────────────────
+        # ── Runtime state ──────────────────────────────────────────────────────
         self.queue          = []    # jobs assigned to this VM
-        self.available_time = 0.0   # simulation clock time when VM finishes all queued work
+        self.available_time = 0.0   # when this VM finishes all queued work (ms)
 
-        # ── History (for metrics) ─────────────────────────────────────────────
-        self.total_energy   = 0.0   # total energy consumed across all jobs
+        # ── History (for metrics) ──────────────────────────────────────────────
         self.completed_jobs = []    # all jobs this VM has finished
 
     # ── Utilisation ───────────────────────────────────────────────────────────
     def get_utilization(self, current_time=0.0):
         """
-        Returns real-time utilisation as a fraction between 0.0 and 1.0.
-        Based on how much backlog the VM has relative to a 500ms reference window.
-        If the VM is free (available_time <= current_time), utilisation is 0.
+        Real-time utilisation (0.0 - 1.0).
+        Based on how much backlog exists relative to a 500ms reference window.
+        Returns 0 if the VM is currently free.
         """
         if self.available_time <= current_time:
             return 0.0
-        backlog_ms = self.available_time - current_time
-        return min(backlog_ms / 500.0, 1.0)
+        return min((self.available_time - current_time) / 500.0, 1.0)
 
     def get_avg_utilization(self, simulation_end_time):
         """
-        Returns average utilisation over the full simulation.
-        = total CPU time spent executing jobs / total simulation time.
-        Used for final metrics and plots.
+        Average CPU utilisation over the full simulation.
+        = total time spent executing / total simulation time.
+        Used for the CPU utilisation plot.
         """
         if simulation_end_time <= 0:
             return 0.0
@@ -44,40 +41,29 @@ class VM:
         """Returns True if utilisation exceeds the overload threshold."""
         return self.get_utilization(current_time) >= OVERLOAD_THRESHOLD
 
-    # ── Job assignment ────────────────────────────────────────────────────────
+    # ── Job assignment ─────────────────────────────────────────────────────────
     def assign_job(self, job, current_time):
         """
-        Assigns a job to this VM, calculates wait/exe/response times,
-        updates VM state, and marks the job outcome.
+        Assigns a job to this VM and calculates its timing fields.
+        wait_time  = how long the job waits before it starts running
+        exe_time   = how long the job takes to run on this VM
+        response_time = wait + exe (this is what we measure against SLA)
         """
-        # wait time = how long until VM is free from current time
         wait_time = max(0.0, self.available_time - current_time)
+        exe_time  = (job.cpu_demand / self.cpu_capacity) * 1000
+        exe_time *= (1.0 / job.priority)   # higher priority = faster execution
 
-        # execution time = job's CPU demand scaled by VM capacity (ms)
-        exe_time = (job.cpu_demand / self.cpu_capacity) * 1000
-
-        # priority scaling — higher priority jobs execute faster
-        priority_factor = 1.0 / job.priority
-        exe_time *= priority_factor
-
-        # fill in job timing fields
         job.wait_time     = wait_time
         job.exe_time      = exe_time
         job.response_time = wait_time + exe_time
 
-        # energy cost for this job
-        job.cost = exe_time * self.energy_rate
-
-        # update VM state
         self.available_time = current_time + wait_time + exe_time
-        self.total_energy   += job.cost
         self.completed_jobs.append(job)
         self.queue.append(job)
 
-    # ── Reset ─────────────────────────────────────────────────────────────────
+    # ── Reset ──────────────────────────────────────────────────────────────────
     def reset(self):
-        """Resets VM to initial state for a fresh simulation run."""
+        """Resets VM to a clean state for a fresh simulation run."""
         self.queue          = []
         self.available_time = 0.0
-        self.total_energy   = 0.0
         self.completed_jobs = []
