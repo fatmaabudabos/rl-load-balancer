@@ -14,7 +14,7 @@ os.makedirs("results/plots", exist_ok=True)
 
 def load_models():
     """
-    Loads all 3 trained models from models/saved/.
+    Loads all 4 trained models from models/saved/.
     No retraining — just loads what was already saved.
     """
     print("Loading saved models...")
@@ -30,19 +30,24 @@ def load_models():
     print("  Random Forest loaded")
 
     # LSTM
-    device    = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device     = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     lstm_model = LSTMPredictor()
     lstm_model.load_state_dict(torch.load("models/saved/lstm.pt", map_location=device))
     lstm_model.to(device)
     lstm_model.eval()
     print("  LSTM loaded")
 
-    return lr_model, rf_model, lstm_model, device
+    # XGBoost
+    with open("models/saved/xgboost.pkl", "rb") as f:
+        xgb_model = pickle.load(f)
+    print("  XGBoost loaded")
+
+    return lr_model, rf_model, lstm_model, xgb_model, device
 
 
-def evaluate_all(lr_model, rf_model, lstm_model, device):
+def evaluate_all(lr_model, rf_model, lstm_model, xgb_model, device):
     """
-    Runs all 3 models on the same test set and collects MSE and MAE.
+    Runs all 4 models on the same test set and collects MSE and MAE.
     """
     print("\nLoading test data...")
     X_train, X_test, y_train, y_test, X_train_flat, X_test_flat = get_data()
@@ -88,6 +93,18 @@ def evaluate_all(lr_model, rf_model, lstm_model, device):
         ]
     }
 
+    # ── XGBoost ───────────────────────────────────────────────────────────────
+    print("Evaluating XGBoost...")
+    y_pred_xgb = xgb_model.predict(X_test_flat)
+    results["XGBoost"] = {
+        "mse": mean_squared_error(y_test, y_pred_xgb),
+        "mae": mean_absolute_error(y_test, y_pred_xgb),
+        "per_feature_mae": [
+            mean_absolute_error(y_test[:, i], y_pred_xgb[:, i])
+            for i in range(4)
+        ]
+    }
+
     return results
 
 
@@ -119,7 +136,7 @@ def print_comparison(results):
     for name in results:
         print(f"  {name:>18}", end="")
     print()
-    print("  " + "-" * 65)
+    print("  " + "-" * 80)
     for i, feat in enumerate(feature_names):
         print(f"  {feat:<12}", end="")
         for name in results:
@@ -130,17 +147,17 @@ def print_comparison(results):
 
 def plot_comparison(results):
     """
-    Generates two plots:
-    1. Bar chart comparing MSE across all 3 models
-    2. Bar chart comparing MAE across all 3 models
-    Saved as a single figure with two subplots.
+    Generates two bar charts side by side:
+    1. MSE comparison across all 4 models
+    2. MAE comparison across all 4 models
+    Saved to results/plots/model_comparison.png
     """
     model_names = list(results.keys())
     mse_values  = [results[m]["mse"] for m in model_names]
     mae_values  = [results[m]["mae"] for m in model_names]
-    colors      = ["#3498db", "#e74c3c", "#2ecc71"]
+    colors      = ["#3498db", "#e74c3c", "#2ecc71", "#9b59b6"]
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
 
     # ── MSE plot ──────────────────────────────────────────────────────────────
     bars1 = ax1.bar(model_names, mse_values, color=colors, alpha=0.85, width=0.5)
@@ -152,6 +169,7 @@ def plot_comparison(results):
                  bar.get_height() + 0.00005,
                  f"{val:.6f}", ha="center", va="bottom", fontsize=9)
     ax1.grid(True, alpha=0.3, axis="y")
+    ax1.tick_params(axis="x", rotation=15)
 
     # ── MAE plot ──────────────────────────────────────────────────────────────
     bars2 = ax2.bar(model_names, mae_values, color=colors, alpha=0.85, width=0.5)
@@ -163,6 +181,7 @@ def plot_comparison(results):
                  bar.get_height() + 0.0002,
                  f"{val:.6f}", ha="center", va="bottom", fontsize=9)
     ax2.grid(True, alpha=0.3, axis="y")
+    ax2.tick_params(axis="x", rotation=15)
 
     plt.suptitle("ML Model Comparison — Google Cluster Data 2011",
                  fontsize=14, fontweight="bold", y=1.02)
@@ -180,8 +199,8 @@ if __name__ == "__main__":
     print("TRAIN ALL — Model Comparison")
     print("=" * 55)
 
-    lr_model, rf_model, lstm_model, device = load_models()
-    results = evaluate_all(lr_model, rf_model, lstm_model, device)
+    lr_model, rf_model, lstm_model, xgb_model, device = load_models()
+    results = evaluate_all(lr_model, rf_model, lstm_model, xgb_model, device)
     print_comparison(results)
     plot_comparison(results)
 
