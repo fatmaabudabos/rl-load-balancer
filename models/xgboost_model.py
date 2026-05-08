@@ -8,7 +8,7 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error
 from models.prepare_data import get_data
 
 # ── Parameters ────────────────────────────────────────────────────────────────
-SAMPLE_SIZE  = 200_000   # same as Random Forest — keeps training time reasonable
+SAMPLE_SIZE  = 500_000   # increased from 200k to see if more data improves results
 N_ESTIMATORS = 100       # number of boosting rounds (trees)
 LEARNING_RATE = 0.1      # how much each tree corrects the previous one
 MAX_DEPTH    = 6         # how deep each tree can grow
